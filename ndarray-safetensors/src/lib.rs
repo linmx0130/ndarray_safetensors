@@ -1,7 +1,10 @@
+//! Safetensors support utilities for ndarray
+
 use safetensors;
 use ndarray;
 use std::{borrow::Cow, mem::size_of};
 
+/// A data structure like `TensorView` in safetensors, but it owns the data
 pub struct TensorViewWithDataBuffer{
     buf: Vec<u8>,
     dtype: safetensors::Dtype,
@@ -9,6 +12,7 @@ pub struct TensorViewWithDataBuffer{
 }
 
 impl TensorViewWithDataBuffer {
+    /// Create a standard TensorView from this buffer
     pub fn to_tensor_view<'data>(&'data self) -> safetensors::tensor::TensorView<'data> {
         safetensors::tensor::TensorView::new(
             self.dtype,
@@ -17,6 +21,7 @@ impl TensorViewWithDataBuffer {
         ).unwrap()
     }
 
+    /// Create a new TensorViewWithDataBuffer object
     pub fn new<A, S, D>(array: &ndarray::ArrayBase<S, D>) -> TensorViewWithDataBuffer
         where 
             A: Clone + ndarray::NdFloat + CommonSupportedElement, 
@@ -57,8 +62,11 @@ impl<'data> safetensors::View for TensorViewWithDataBuffer {
     }
 }
 
+/// Element type traits for f32 and f64, which is supported by both ndarray and safetensors
 pub trait CommonSupportedElement {
+    /// Extend the buffer vector with the little endian bytes of this value.
     fn extend_byte_vec(&self, v: &mut Vec<u8>);
+    /// Safetensor dtype for the type.
     fn safetensors_dtype() -> safetensors::Dtype;
 }
 
