@@ -3,6 +3,7 @@
 use safetensors;
 use ndarray;
 use std::{borrow::Cow, mem::size_of};
+use std::error::Error;
 
 /// A data structure like `TensorView` in safetensors, but it owns the data
 pub struct TensorViewWithDataBuffer{
@@ -24,7 +25,7 @@ impl TensorViewWithDataBuffer {
     /// Create a new TensorViewWithDataBuffer object
     pub fn new<A, S, D>(array: &ndarray::ArrayBase<S, D>) -> TensorViewWithDataBuffer
         where 
-            A: Clone + ndarray::NdFloat + CommonSupportedElement, 
+            A: CommonSupportedElement, 
             S: ndarray::Data<Elem = A>,
             D:ndarray::Dimension 
     {
@@ -63,11 +64,13 @@ impl<'data> safetensors::View for TensorViewWithDataBuffer {
 }
 
 /// Element type traits for f32 and f64, which is supported by both ndarray and safetensors
-pub trait CommonSupportedElement {
+pub trait CommonSupportedElement: Clone + ndarray::NdFloat {
     /// Extend the buffer vector with the little endian bytes of this value.
     fn extend_byte_vec(&self, v: &mut Vec<u8>);
     /// Safetensor dtype for the type.
     fn safetensors_dtype() -> safetensors::Dtype;
+
+    fn from_bytes(bytes: &[u8]) -> Self;
 }
 
 impl CommonSupportedElement for f32 {
@@ -77,6 +80,11 @@ impl CommonSupportedElement for f32 {
     fn safetensors_dtype() -> safetensors::Dtype {
         safetensors::Dtype::F32
     }   
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let bytes_fixed: [u8; 4] = [bytes[0], bytes[1], bytes[2], bytes[3]];
+        f32::from_le_bytes(bytes_fixed)
+    }
 }
 
 impl CommonSupportedElement for f64 {
@@ -85,5 +93,45 @@ impl CommonSupportedElement for f64 {
     }
     fn safetensors_dtype() -> safetensors::Dtype {
         safetensors::Dtype::F64
-    }    
+    }
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let bytes_fixed: [u8; 8] = [bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]];
+        f64::from_le_bytes(bytes_fixed)
+    }
+    
+}
+
+/// Error to emit if the type doesn't match for parsing a tensor view
+#[derive(Debug, Clone, Copy)]
+pub struct TypeMismatchedError {
+    expected_type: safetensors::Dtype,
+    actual_type: safetensors::Dtype
+}
+impl Error for TypeMismatchedError {}
+impl std::fmt::Display for TypeMismatchedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Expected data type to be {:?}, but found {:?}", self.expected_type, self.actual_type)
+    }
+}
+
+/// Parse a Safetensors View as a ndarray
+pub fn parse_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<A>, ndarray::Dim<ndarray::IxDynImpl>>, TypeMismatchedError>  
+    where 
+        A: CommonSupportedElement,
+{
+    if A::safetensors_dtype() != view.dtype() {
+        return Err(TypeMismatchedError{
+            expected_type: A::safetensors_dtype(),
+            actual_type: view.dtype()
+        });
+    }
+    let dtype_size = size_of::<A>();
+    let data = view.data();
+    let shape = Vec::from(view.shape());
+    let mut values: Vec<A> = Vec::with_capacity(data.len() / dtype_size);
+    for idx in (0..data.len()).step_by(dtype_size) {
+        values.push(A::from_bytes(&data[idx..(idx+dtype_size)]))
+    }
+    let array = ndarray::Array::from_vec(values);
+    Ok(array.into_shape_with_order(shape).unwrap())
 }

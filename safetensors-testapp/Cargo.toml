@@ -7,3 +7,4 @@ edition = "2021"
 ndarray-safetensors = {"path"= "../ndarray-safetensors"}
 ndarray = "0.16.1"
 safetensors = "0.4.5"
+memmap2 = "0.9.5"
