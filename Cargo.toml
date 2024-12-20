@@ -1,0 +1,3 @@
+[workspace]
+members = ["ndarray-safetensors", "safetensors-testapp"]
+resolver = "2"
