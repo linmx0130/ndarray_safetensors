@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+ndarray-safetensors = {"path"= "../ndarray-safetensors"}
+ndarray = "0.16.1"
+safetensors = "0.4.5"

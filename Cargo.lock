@@ -138,6 +138,11 @@ dependencies = [
 [[package]]
 name = "safetensors-testapp"
 version = "0.1.0"
+dependencies = [
+ "ndarray",
+ "ndarray-safetensors",
+ "safetensors",
+]
 
 [[package]]
 name = "serde"
