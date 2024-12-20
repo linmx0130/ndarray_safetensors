@@ -17,8 +17,11 @@ impl TensorViewWithDataBuffer {
         ).unwrap()
     }
 
-    pub fn new<A, D>(array: &ndarray::Array<A, D>) -> TensorViewWithDataBuffer
-        where A: Clone + ndarray::NdFloat + CommonSupportedElement, D:ndarray::Dimension 
+    pub fn new<A, S, D>(array: &ndarray::ArrayBase<S, D>) -> TensorViewWithDataBuffer
+        where 
+            A: Clone + ndarray::NdFloat + CommonSupportedElement, 
+            S: ndarray::Data<Elem = A>,
+            D:ndarray::Dimension 
     {
         let shape = Vec::from(array.shape());
         // convert the tensor to one dim array with row-major (C style)
