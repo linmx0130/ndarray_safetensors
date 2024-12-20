@@ -33,8 +33,14 @@ fn deserialize_demo() {
     let tensors = safetensors::SafeTensors::deserialize(&buffer).unwrap();
     for (name, tensor_view) in tensors.tensors() {
         println!("Tensor: {}", name);
-        let arr = ndarray_safetensors::parse_tensor_view_data::<f32>(&tensor_view).unwrap();
-        println!("{}", arr);
+        if tensor_view.dtype() == safetensors::Dtype::F32 {
+            let arr= ndarray_safetensors::parse_tensor_view_data::<f32>(&tensor_view).unwrap();
+            println!("{}", arr);
+        }
+        if tensor_view.dtype() == safetensors::Dtype::F64 {
+            let arr= ndarray_safetensors::parse_tensor_view_data::<f64>(&tensor_view).unwrap();
+            println!("{}", arr);
+        }
     }
 }
 fn main() {

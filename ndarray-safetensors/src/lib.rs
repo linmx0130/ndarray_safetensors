@@ -135,3 +135,41 @@ pub fn parse_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Resu
     let array = ndarray::Array::from_vec(values);
     Ok(array.into_shape_with_order(shape).unwrap())
 }
+
+/// Deserialize safetensors to ndarrays of the same element type and dimension type.
+pub fn parse_tensors<A>(tensors: &safetensors::SafeTensors) -> Result<Vec<(String, ndarray::ArrayBase<ndarray::OwnedRepr<A>, ndarray::Dim<ndarray::IxDynImpl>>)>, TypeMismatchedError>
+    where
+        A: CommonSupportedElement,
+{
+    let mut arrays = Vec::with_capacity(tensors.len());
+
+    for (name, tensor) in tensors.iter() {
+        let array = parse_tensor_view_data::<A>(&tensor)?;
+        arrays.push((String::from(name), array)); 
+    }
+
+    Ok(arrays)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    pub fn test_serialize_and_deserialize_f32(){
+        let x = ndarray::array![[1.0f32, -1.0f32], [2.0f32, -2.0f32]];
+        let y = ndarray::array![3.14f32, 2.718f32];
+        let data = vec![("x", TensorViewWithDataBuffer::new(&x)), ("y", TensorViewWithDataBuffer::new(&y))];
+        let serialized_data = safetensors::serialize(data, &None).unwrap();
+        let deserialized_data = parse_tensors::<f32>(&safetensors::SafeTensors::deserialize(&serialized_data).unwrap()).unwrap();
+
+        let mut data_map = HashMap::new();
+        deserialized_data.iter().for_each(|(name, array)| { data_map.insert(name.clone(), array); });
+        let d_x = data_map.get("x").unwrap().to_shape([2, 2]).unwrap().to_owned();
+        let d_y = data_map.get("y").unwrap().to_shape([2]).unwrap().to_owned();
+        
+        assert_eq!(x, d_x);
+        assert_eq!(y, d_y);
+    }
+}
