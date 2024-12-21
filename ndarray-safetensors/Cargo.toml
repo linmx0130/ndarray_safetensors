@@ -2,6 +2,13 @@
 name = "ndarray-safetensors"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Serialize / deserialize ndarrays with safetensors."
+homepage = "https://github.com/linmx0130/ndarray_safetensors"
+repository = "https://github.com/linmx0130/ndarray_safetensors"
+readme = "../README.md"
+keywords = ["safetensors", "ndarray", "tensors", "array", "serialization"]
+
 
 [dependencies]
 ndarray = "0.16.1"
