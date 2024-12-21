@@ -189,15 +189,16 @@ pub fn parse_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Resu
 /// Example:
 /// ```
 /// # use ndarray::array;
+/// # use ndarray::Array2;
 /// # use ndarray_safetensors::{TensorViewWithDataBuffer, parse_tensor_view_data_with_dimension};
 /// // Serailize ndarrays
 /// let arr = array![[1.0, -1.0], [2.0, -2.0]];
 /// let data = vec![("arr", TensorViewWithDataBuffer::new(&arr))];
 /// let serialized_data = safetensors::serialize(data, &None).unwrap();
 /// 
-/// // Deserialize ndarrays
+/// // Deserialize ndarrays with type and dimension hint.
 /// let tensors = safetensors::SafeTensors::deserialize(&serialized_data).unwrap();
-/// let array = parse_tensor_view_data_with_dimension::<f64,_,_>(&tensors.tensor("arr").unwrap(), (2, 2)).unwrap();
+/// let array :Array2<f64>  = parse_tensor_view_data_with_dimension(&tensors.tensor("arr").unwrap(), (2, 2)).unwrap();
 /// assert_eq!(array[[0,0]], 1.0);
 /// assert_eq!(array[[0,1]], -1.0);
 /// assert_eq!(array[[1,0]], 2.0);
