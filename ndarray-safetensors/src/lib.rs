@@ -167,8 +167,8 @@ pub fn parse_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Resu
     for idx in (0..data.len()).step_by(dtype_size) {
         values.push(A::from_bytes(&data[idx..(idx+dtype_size)]))
     }
-    let array = ndarray::Array::from_vec(values);
-    Ok(array.into_shape_with_order(shape).unwrap())
+    let array = ndarray::ArrayBase::from_shape_vec(shape, values).unwrap();
+    Ok(array)
 }
 
 /// Deserialize safetensors to ndarrays of the same element type and dimension type.
