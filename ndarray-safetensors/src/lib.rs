@@ -30,7 +30,7 @@
 //! Copyright (c) 2024, Mengxiao Lin. The crate is published under MIT License.
 
 use safetensors;
-use ndarray;
+use ndarray::{self, ShapeBuilder};
 use std::{borrow::Cow, mem::size_of};
 use std::error::Error;
 
@@ -134,28 +134,35 @@ impl CommonSupportedElement for f64 {
 }
 
 /// Error to emit if the type doesn't match for parsing a tensor view
-#[derive(Debug, Clone, Copy)]
-pub struct TypeMismatchedError {
-    expected_type: safetensors::Dtype,
-    actual_type: safetensors::Dtype
+#[derive(Debug, Clone)]
+pub enum DeserializationError {
+    TypeMismatchedError { expected_type: safetensors::Dtype, actual_type: safetensors::Dtype},
+    ShapeMismatchedError { expected_shape: Vec<usize>, actual_shape: Vec<usize> }
 }
-impl Error for TypeMismatchedError {}
-impl std::fmt::Display for TypeMismatchedError {
+impl Error for DeserializationError {}
+impl std::fmt::Display for DeserializationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Expected data type to be {:?}, but found {:?}", self.expected_type, self.actual_type)
+        match self {
+            Self::TypeMismatchedError { expected_type, actual_type } => {
+                write!(f, "Expected data type to be {:?}, but found {:?}", expected_type, actual_type)
+            }
+            Self::ShapeMismatchedError { expected_shape, actual_shape } => {
+                write!(f, "Expected data shape to be {:?}, but found {:?}", expected_shape, actual_shape)
+            }
+        }
     }
 }
 
 /// Deserialized a Safetensors View as a ndarray
 /// 
 /// The return ndarray will own the data. If the data type of the tensor doesn't match with `A`, 
-/// a [`TypeMismatchedError`] will be returned.
-pub fn parse_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<A>, ndarray::Dim<ndarray::IxDynImpl>>, TypeMismatchedError>  
+/// a [`DeserializationError::TypeMismatchedError`] will be returned.
+pub fn parse_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<A>, ndarray::Dim<ndarray::IxDynImpl>>, DeserializationError>  
     where 
         A: CommonSupportedElement,
 {
     if A::safetensors_dtype() != view.dtype() {
-        return Err(TypeMismatchedError{
+        return Err(DeserializationError::TypeMismatchedError{
             expected_type: A::safetensors_dtype(),
             actual_type: view.dtype()
         });
@@ -171,8 +178,70 @@ pub fn parse_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Resu
     Ok(array)
 }
 
+/// Deserialized a Safetensors View as a ndarray with a known dimension.
+/// 
+/// The return ndarray will own the data. The shape type will be inferred based on the provided dimension,
+/// instead of using the dynamic shape.
+/// 
+/// If the data type of the tensor doesn't match with `A`, a [`DeserializationError::TypeMismatchedError`] will be returned.
+/// If the shape of the tnesor doesn't match the provided dimension, a [`DeserializationError::ShapeMismatchedError`] will be returned.
+/// 
+/// Example:
+/// ```
+/// # use ndarray::array;
+/// # use ndarray_safetensors::{TensorViewWithDataBuffer, parse_tensor_view_data_with_dimension};
+/// // Serailize ndarrays
+/// let arr = array![[1.0, -1.0], [2.0, -2.0]];
+/// let data = vec![("arr", TensorViewWithDataBuffer::new(&arr))];
+/// let serialized_data = safetensors::serialize(data, &None).unwrap();
+/// 
+/// // Deserialize ndarrays
+/// let tensors = safetensors::SafeTensors::deserialize(&serialized_data).unwrap();
+/// let array = parse_tensor_view_data_with_dimension::<f64,_,_>(&tensors.tensor("arr").unwrap(), (2, 2)).unwrap();
+/// assert_eq!(array[[0,0]], 1.0);
+/// assert_eq!(array[[0,1]], -1.0);
+/// assert_eq!(array[[1,0]], 2.0);
+/// assert_eq!(array[[1,1]], -2.0);
+/// 
+/// // Wrong dimension.
+/// assert!(parse_tensor_view_data_with_dimension::<f64,_,_>(&tensors.tensor("arr").unwrap(), (1, 4)).is_err())
+/// ```
+pub fn parse_tensor_view_data_with_dimension<A, D, ID>(view: &safetensors::tensor::TensorView, dim: ID) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<A>, D>, DeserializationError>
+    where
+        A: CommonSupportedElement,
+        D: ndarray::Dimension,
+        ID: ndarray::IntoDimension<Dim = D>,
+{
+    if A::safetensors_dtype() != view.dtype() {
+        return Err(DeserializationError::TypeMismatchedError{
+            expected_type: A::safetensors_dtype(),
+            actual_type: view.dtype()
+        });
+    }
+    let dim = dim.into_dimension();
+    let hinted_shape= Vec::from(dim.as_array_view().as_slice().unwrap());
+    let actual_shape = Vec::from(view.shape());
+    if hinted_shape != actual_shape {
+        return Err(DeserializationError::ShapeMismatchedError {
+            expected_shape: hinted_shape,
+            actual_shape: actual_shape 
+        })
+    }
+    
+    let dtype_size = size_of::<A>();
+    let data = view.data();
+
+    let mut values: Vec<A> = Vec::with_capacity(data.len() / dtype_size);
+    for idx in (0..data.len()).step_by(dtype_size) {
+        values.push(A::from_bytes(&data[idx..(idx+dtype_size)]))
+    }
+    let decode_shape = ndarray::Shape::from(dim).set_f(false);
+    let array = ndarray::ArrayBase::from_shape_vec(decode_shape, values).unwrap();
+    Ok(array)
+}
+
 /// Deserialize safetensors to ndarrays of the same element type and dimension type.
-pub fn parse_tensors<A>(tensors: &safetensors::SafeTensors) -> Result<Vec<(String, ndarray::ArrayBase<ndarray::OwnedRepr<A>, ndarray::Dim<ndarray::IxDynImpl>>)>, TypeMismatchedError>
+pub fn parse_tensors<A>(tensors: &safetensors::SafeTensors) -> Result<Vec<(String, ndarray::ArrayBase<ndarray::OwnedRepr<A>, ndarray::Dim<ndarray::IxDynImpl>>)>, DeserializationError>
     where
         A: CommonSupportedElement,
 {
