@@ -3,7 +3,7 @@ ndarray-safetensors
 Serialize / deserialize [Rust ndarray](https://docs.rs/ndarray/latest/ndarray/) with [Safetensors](https://huggingface.co/docs/safetensors/en/index).
 
 ## Demo
-See `safetensors-testapp` for more details. Here is the code to print all tensors from a safetensors file.
+See `safetensors-testapp` for more details. Here is an end-to-end demo to print all tensors from a safetensors file.
 
 ```rust
 use ndarray_safetensors::parse_tensor_view_data;

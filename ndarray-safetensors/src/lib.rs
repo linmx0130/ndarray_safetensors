@@ -1,4 +1,33 @@
-//! Safetensors support utilities for ndarray
+//! Serialize / deserialize [Rust ndarray](https://docs.rs/ndarray/latest/ndarray/) with [Safetensors](https://huggingface.co/docs/safetensors/en/index).
+//! 
+//! ## Main APIs
+//! - **[`TensorViewWithDataBuffer`]**: `TensorView` implementation accepted by Safetensors crate, but it owns the data and can be easily created from ndarray.
+//! - **[`parse_tensor_view_data`]**: Parse a TensorView from Safetensors into ndarray.
+//! 
+//! ## Demo
+//! 
+//! ```
+//! # use ndarray::array;
+//! # use ndarray_safetensors::{TensorViewWithDataBuffer, parse_tensors};
+//! // Serailize ndarrays
+//! let arr = array![[1.0, -1.0], [2.0, -2.0]];
+//! let data = vec![("arr", TensorViewWithDataBuffer::new(&arr))];
+//! let serialized_data = safetensors::serialize(data, &None).unwrap();
+//! 
+//! // Deserialize ndarrays
+//! let tensors = safetensors::SafeTensors::deserialize(&serialized_data).unwrap();
+//! let arrays = parse_tensors::<f64>(&tensors).unwrap();
+//! let (name, array) = &arrays[0];
+//! assert_eq!(name, "arr");
+//! assert_eq!(array[[1,1]], -2.0);
+//! 
+//! // Deserialize with a wrong type hint
+//! let parse_with_wrong_type = parse_tensors::<f32>(&tensors);
+//! assert!(parse_with_wrong_type.is_err())
+//! ```
+//! 
+//! ## License
+//! Copyright (c) 2024, Mengxiao Lin. The crate is published under MIT License.
 
 use safetensors;
 use ndarray;
@@ -13,7 +42,7 @@ pub struct TensorViewWithDataBuffer{
 }
 
 impl TensorViewWithDataBuffer {
-    /// Create a standard TensorView from this buffer
+    /// Create a standard TensorView from this buffer. No copy of data occurs.
     pub fn to_tensor_view<'data>(&'data self) -> safetensors::tensor::TensorView<'data> {
         safetensors::tensor::TensorView::new(
             self.dtype,
@@ -22,7 +51,9 @@ impl TensorViewWithDataBuffer {
         ).unwrap()
     }
 
-    /// Create a new TensorViewWithDataBuffer object
+    /// Create a new TensorViewWithDataBuffer object from a ndarray.
+    /// 
+    /// Notes: Copy of the data occurs once. The original array won't be consumed.
     pub fn new<A, S, D>(array: &ndarray::ArrayBase<S, D>) -> TensorViewWithDataBuffer
         where 
             A: CommonSupportedElement, 
@@ -69,7 +100,8 @@ pub trait CommonSupportedElement: Clone + ndarray::NdFloat {
     fn extend_byte_vec(&self, v: &mut Vec<u8>);
     /// Safetensor dtype for the type.
     fn safetensors_dtype() -> safetensors::Dtype;
-
+    /// Create the element value from bytes slice. Caller should ensure that it has enough
+    /// bytes to consume.
     fn from_bytes(bytes: &[u8]) -> Self;
 }
 
@@ -114,7 +146,10 @@ impl std::fmt::Display for TypeMismatchedError {
     }
 }
 
-/// Parse a Safetensors View as a ndarray
+/// Deserialized a Safetensors View as a ndarray
+/// 
+/// The return ndarray will own the data. If the data type of the tensor doesn't match with `A`, 
+/// a [`TypeMismatchedError`] will be returned.
 pub fn parse_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<A>, ndarray::Dim<ndarray::IxDynImpl>>, TypeMismatchedError>  
     where 
         A: CommonSupportedElement,
