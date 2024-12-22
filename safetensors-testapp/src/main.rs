@@ -14,11 +14,15 @@ fn serailize_demo () {
     
     let slice = arr32.slice(s![1.., .., -1]);
     let tvb_slice = TensorViewWithDataBuffer::new(&slice);
+
+    let arr_i32 = array![1, 2, 3, 0, -1, -2, -3];
+    let tvb_i32 = TensorViewWithDataBuffer::new(&arr_i32);
     
     let data = vec![
         ("arr32", tvb32),
         ("arr64", tvb64),
-        ("slice", tvb_slice)
+        ("slice", tvb_slice),
+        ("arr_i32", tvb_i32)
     ];
     let path = Path::new("data/from_rust.safetensors");
     safetensors::serialize_to_file(data, &None, &path).unwrap();

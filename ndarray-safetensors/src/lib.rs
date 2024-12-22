@@ -28,7 +28,9 @@
 //! 
 //! ## License
 //! Copyright (c) 2024, Mengxiao Lin. The crate is published under MIT License.
+mod element;
 
+pub use crate::element::CommonSupportedElement;
 use safetensors;
 use ndarray::{self, ShapeBuilder};
 use std::{borrow::Cow, mem::size_of};
@@ -94,44 +96,6 @@ impl<'data> safetensors::View for TensorViewWithDataBuffer {
     }
 }
 
-/// Element type traits for f32 and f64, which is supported by both ndarray and safetensors
-pub trait CommonSupportedElement: Clone + ndarray::NdFloat {
-    /// Extend the buffer vector with the little endian bytes of this value.
-    fn extend_byte_vec(&self, v: &mut Vec<u8>);
-    /// Safetensor dtype for the type.
-    fn safetensors_dtype() -> safetensors::Dtype;
-    /// Create the element value from bytes slice. Caller should ensure that it has enough
-    /// bytes to consume.
-    fn from_bytes(bytes: &[u8]) -> Self;
-}
-
-impl CommonSupportedElement for f32 {
-    fn extend_byte_vec(&self, v: &mut Vec<u8>) {
-        v.extend_from_slice(&self.to_le_bytes());
-    } 
-    fn safetensors_dtype() -> safetensors::Dtype {
-        safetensors::Dtype::F32
-    }   
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let bytes_fixed: [u8; 4] = [bytes[0], bytes[1], bytes[2], bytes[3]];
-        f32::from_le_bytes(bytes_fixed)
-    }
-}
-
-impl CommonSupportedElement for f64 {
-    fn extend_byte_vec(&self, v: &mut Vec<u8>) {
-        v.extend_from_slice(&self.to_le_bytes());
-    }
-    fn safetensors_dtype() -> safetensors::Dtype {
-        safetensors::Dtype::F64
-    }
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let bytes_fixed: [u8; 8] = [bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]];
-        f64::from_le_bytes(bytes_fixed)
-    }
-    
-}
 
 /// Error to emit if the type doesn't match for parsing a tensor view
 #[derive(Debug, Clone)]
