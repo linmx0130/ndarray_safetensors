@@ -30,7 +30,7 @@
 //! Copyright (c) 2024, Mengxiao Lin. The crate is published under MIT License.
 mod element;
 
-pub use crate::element::CommonSupportedElement;
+pub use crate::element::{CommonSupportedElement, Float16ConversionSupportedElement};
 use safetensors;
 use ndarray::{self, ShapeBuilder};
 use std::{borrow::Cow, mem::size_of};
@@ -220,6 +220,31 @@ pub fn parse_tensors<A>(tensors: &safetensors::SafeTensors) -> Result<Vec<(Strin
     Ok(arrays)
 }
 
+/// Deserialized a FP16 Safetensors View as a ndarray
+/// 
+/// The return ndarray will own the data. If the data type of the tensor is not FP16, 
+/// a [`DeserializationError::TypeMismatchedError`] will be returned.
+pub fn parse_fp16_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<A>, ndarray::Dim<ndarray::IxDynImpl>>, DeserializationError>  
+    where 
+        A: Float16ConversionSupportedElement,
+{
+    if view.dtype() != safetensors::Dtype::F16 {
+        return Err(DeserializationError::TypeMismatchedError{
+            expected_type: safetensors::Dtype::F16,
+            actual_type: view.dtype()
+        });
+    }
+    let dtype_size = size_of::<A>();
+    let data = view.data();
+    let shape = Vec::from(view.shape());
+    let mut values: Vec<A> = Vec::with_capacity(data.len() / dtype_size);
+    for idx in (0..data.len()).step_by(2) {
+        values.push(A::from_fp16_bytes(&data[idx..(idx+2)]))
+    }
+    let array = ndarray::ArrayBase::from_shape_vec(shape, values).unwrap();
+    Ok(array)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,5 +265,19 @@ mod tests {
         
         assert_eq!(x, d_x);
         assert_eq!(y, d_y);
+    }
+
+    #[test]
+    pub fn test_deserialize_f16_data() {
+        let buf: Vec<u8> = vec![0x48, 0x42, 0x0, 0x3C, 0x0, 0xC0];
+        let tensor_view = TensorViewWithDataBuffer {
+            dtype: safetensors::Dtype::F16,
+            buf: buf,
+            shape: vec![3]
+        };
+        let arr = parse_fp16_tensor_view_data::<f32>(&tensor_view.to_tensor_view()).unwrap();
+        assert_eq!(arr[0], 3.140625);
+        assert_eq!(arr[1], 1.0);
+        assert_eq!(arr[2], -2.0);
     }
 }

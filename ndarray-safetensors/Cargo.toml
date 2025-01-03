@@ -13,3 +13,6 @@ keywords = ["safetensors", "ndarray", "tensors", "array", "serialization"]
 [dependencies]
 ndarray = "0.16.1"
 safetensors = "0.4.5"
+
+[dev-dependencies]
+assert_approx_eq = "1.0"
