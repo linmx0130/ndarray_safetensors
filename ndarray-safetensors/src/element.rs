@@ -1,4 +1,3 @@
-use ndarray;
 /// Element type traits for data types supported by both ndarray and safetensors
 pub trait CommonSupportedElement: Clone {
     /// Extend the buffer vector with the little endian bytes of this value.
@@ -162,7 +161,7 @@ impl Float16ConversionSupportedElement for f32 {
         let fraction: u32 = (((bytes[1] & 0x3) as u32) << 8) | (bytes[0] as u32);   // 10 bits of fraction
         
         if exponent == 0 {
-            return if fraction == 0 {
+            if fraction == 0 {
                 // zero
                 f32::from_bits(sign)
             } else {
@@ -170,7 +169,7 @@ impl Float16ConversionSupportedElement for f32 {
                 let e = fraction.leading_zeros() - 22;
                 let exp = (127 - 15 - e) << 23;
                 let new_frac = (fraction << (14 + e)) & 0x7FFFFF;
-                f32::from_bits(((sign as u32) << 24)| exp | new_frac)
+                f32::from_bits((sign << 24)| exp | new_frac)
             }
         } else if exponent == 0x1F {
             let bits = sign | 0x7F800000; // full 1 for exponents
@@ -218,8 +217,8 @@ impl Float16ConversionSupportedElement for f32 {
             let mut exp16 = (exponent - (127 - 15)) as u8;
             // fraction part is larger than 10 bits => shift right and adjust exponent
             if frac16 > 0x3FF {
-                frac16 = frac16 >> 1;
-                exp16 = exp16 + 1;
+                frac16 >>= 1;
+                exp16 += 1;
             }
             
             if exp16 > 0x1F {

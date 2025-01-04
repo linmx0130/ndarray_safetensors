@@ -1,6 +1,5 @@
 use ndarray_safetensors::TensorViewWithDataBuffer;
 use ndarray::{Array2, Array3, array, s};
-use safetensors;
 use std::path::Path;
 use std::fs::File;
 use memmap2::MmapOptions;
@@ -25,7 +24,7 @@ fn serailize_demo () {
         ("arr_i32", tvb_i32)
     ];
     let path = Path::new("data/from_rust.safetensors");
-    safetensors::serialize_to_file(data, &None, &path).unwrap();
+    safetensors::serialize_to_file(data, &None, path).unwrap();
     println!("Serialized as data/from_rust.safetensors");
 }
 

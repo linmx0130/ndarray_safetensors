@@ -31,7 +31,6 @@
 mod element;
 
 pub use crate::element::{CommonSupportedElement, Float16ConversionSupportedElement, BFloat16ConversionSupportedElement};
-use safetensors;
 use ndarray::{self, ShapeBuilder};
 use std::{borrow::Cow, mem::size_of};
 use std::error::Error;
@@ -45,7 +44,7 @@ pub struct TensorViewWithDataBuffer{
 
 impl TensorViewWithDataBuffer {
     /// Create a standard TensorView from this buffer. No copy of data occurs.
-    pub fn to_tensor_view<'data>(&'data self) -> safetensors::tensor::TensorView<'data> {
+    pub fn to_tensor_view(&self) -> safetensors::tensor::TensorView<'_> {
         safetensors::tensor::TensorView::new(
             self.dtype,
             self.shape.clone(), 
@@ -241,7 +240,7 @@ pub fn parse_tensor_view_data_with_dimension<A, D, ID>(view: &safetensors::tenso
     if hinted_shape != actual_shape {
         return Err(DeserializationError::ShapeMismatchedError {
             expected_shape: hinted_shape,
-            actual_shape: actual_shape 
+            actual_shape 
         })
     }
     
