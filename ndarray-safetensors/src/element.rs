@@ -142,9 +142,15 @@ impl CommonSupportedElement for u64 {
 }
 
 /// Element type traits that can be used to load/save IEEE 754 binary 16 floating point numbers
+/// 
+/// This trait is internal for this crate even though we will need to expose it as a part of the API.
+/// It could be changed in the future (for example, if fp16 is natively supported by Rust).
 pub trait Float16ConversionSupportedElement where Self: CommonSupportedElement + ndarray::NdFloat {
     /// Create an instance from fp16 little-endian bytes
     fn from_fp16_bytes(bytes: &[u8]) -> Self;
+
+    /// Conver the value as fp16 and save it to the buffer.
+    fn extend_byte_vec_fp16(&self, v: &mut Vec<u8>);
 }
 
 impl Float16ConversionSupportedElement for f32 {
@@ -170,6 +176,58 @@ impl Float16ConversionSupportedElement for f32 {
         } else {
             let exponent = (exponent as u32) + 127 - 15;    // adjust exponent to have 8 bits
             f32::from_bits(sign | (exponent << 23) | (fraction << 13))
+        }
+    }
+
+    fn extend_byte_vec_fp16(&self, v: &mut Vec<u8>) {
+        println!("{}", self);
+        let bits = self.to_bits();
+        let sign = ((bits >> 24) & 0x80) as u8;
+        let exponent = (bits >> 23) & 0xFF;
+        let fraction = bits & 0x007FFFFF;
+
+        let frac16 = (fraction >> 13) as u16;
+        
+        if exponent == 0 {
+            // zero or subnormal, return fp16 as 0
+            if fraction == 0 {
+                // zero
+                v.extend_from_slice(&[0x0, sign]);
+            } else {
+                v.extend_from_slice(&[(frac16 & 0xFF) as u8, sign | ((frac16 >> 8) as u8)]);
+            }
+        } else if exponent == 0xFF {
+            // inf or nan
+            if fraction == 0 {
+                // inf
+                v.extend_from_slice(&[0x0, sign | 0x7C]);
+            } else {
+                v.extend_from_slice(&[(frac16 & 0xFF) as u8, sign | 0x7C | ((frac16 >> 8) as u8)]);
+            }
+        } else { 
+            let rounded = fraction & 0x1FFF;
+            let round = if rounded > 0x1000 {
+                1
+            } else if rounded < 0x1000 {
+                0
+            } else {
+                frac16 & 1
+            };
+            let mut frac16 = frac16 + round;
+            let mut exp16 = (exponent - (127 - 15)) as u8;
+            // fraction part is larger than 10 bits => shift right and adjust exponent
+            if frac16 > 0x3FF {
+                frac16 = frac16 >> 1;
+                exp16 = exp16 + 1;
+            }
+            
+            if exp16 > 0x1F {
+                // the number is too large to be represented in fp16. Represented it as inf
+                v.extend_from_slice(&[0x0, sign | 0x7C]);
+            } else {
+                let b1 = sign | (exp16 << 2) | (((frac16 >> 8) & 0x3) as u8);
+                v.extend_from_slice(&[(frac16 & 0xFF) as u8, b1]);
+            }
         }
     }
 }

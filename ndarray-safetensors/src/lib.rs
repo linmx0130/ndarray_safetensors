@@ -60,7 +60,7 @@ impl TensorViewWithDataBuffer {
         where 
             A: CommonSupportedElement, 
             S: ndarray::Data<Elem = A>,
-            D:ndarray::Dimension 
+            D: ndarray::Dimension 
     {
         let shape = Vec::from(array.shape());
         // convert the tensor to one dim array with row-major (C style)
@@ -79,6 +79,32 @@ impl TensorViewWithDataBuffer {
             buf
         }
     }
+
+    /// Create a new TensorViewWithDataBuffer object in FP16 from a ndarray.
+    pub fn new_fp16<A, S, D>(array: &ndarray::ArrayBase<S, D>) -> TensorViewWithDataBuffer
+        where 
+            A: Float16ConversionSupportedElement, 
+            S: ndarray::Data<Elem = A>,
+            D: ndarray::Dimension 
+    {
+        let shape = Vec::from(array.shape());
+        // convert the tensor to one dim array with row-major (C style)
+        let one_dim_array = array.to_shape(
+            ((array.len(),), ndarray::Order::RowMajor)
+        ).unwrap();
+        let v = one_dim_array.to_vec();
+        let mut buf: Vec<u8> = Vec::with_capacity(v.len() * 2);
+        for value in v {
+            value.extend_byte_vec_fp16(&mut buf);
+        }
+
+        TensorViewWithDataBuffer {
+            dtype: safetensors::Dtype::F16,
+            shape,
+            buf
+        }
+    }
+
 }
 
 impl<'data> safetensors::View for TensorViewWithDataBuffer {
@@ -280,4 +306,25 @@ mod tests {
         assert_eq!(arr[1], 1.0);
         assert_eq!(arr[2], -2.0);
     }
+
+    #[test]
+    pub fn test_serialize_deserialize_f16_data() {
+        let data = ndarray::array![[0.1, 0.2, 1.0], [3.0, 4.0, -2.0],  [0.0, -1.0, 3.14]];
+        let tensor_view = TensorViewWithDataBuffer::new_fp16(&data);
+        let arr = parse_fp16_tensor_view_data::<f32>(&tensor_view.to_tensor_view()).unwrap();
+        for i in 0..3usize {
+            for j in 0..3usize {
+                assert_approx_eq::assert_approx_eq!(data[[i,j]], arr[[i,j]], 1e-3);
+            }
+        }
+
+        let special = ndarray::array![f32::INFINITY, f32::NEG_INFINITY, 2147483647.0, f32::NAN];
+        let tensor_view = TensorViewWithDataBuffer::new_fp16(&special);
+        let sarr = parse_fp16_tensor_view_data::<f32>(&tensor_view.to_tensor_view()).unwrap();
+        assert_eq!(sarr[0], f32::INFINITY);
+        assert_eq!(sarr[1], f32::NEG_INFINITY);
+        assert_eq!(sarr[2], f32::INFINITY);
+        assert!(sarr[3].is_nan()); 
+    }
+    
 }
