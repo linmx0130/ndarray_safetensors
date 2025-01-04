@@ -145,6 +145,8 @@ impl CommonSupportedElement for u64 {
 /// 
 /// This trait is internal for this crate even though we will need to expose it as a part of the API.
 /// It could be changed in the future (for example, if fp16 is natively supported by Rust).
+/// 
+/// All APIs are experimental.
 pub trait Float16ConversionSupportedElement where Self: CommonSupportedElement + ndarray::NdFloat {
     /// Create an instance from fp16 little-endian bytes
     fn from_fp16_bytes(bytes: &[u8]) -> Self;
@@ -180,7 +182,6 @@ impl Float16ConversionSupportedElement for f32 {
     }
 
     fn extend_byte_vec_fp16(&self, v: &mut Vec<u8>) {
-        println!("{}", self);
         let bits = self.to_bits();
         let sign = ((bits >> 24) & 0x80) as u8;
         let exponent = (bits >> 23) & 0xFF;
@@ -232,6 +233,54 @@ impl Float16ConversionSupportedElement for f32 {
     }
 }
 
+
+/// Element type traits that can be used to load/save 
+/// [Brain float point 16](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format) numbers.
+/// 
+/// All APIs are experimental
+pub trait BFloat16ConversionSupportedElement where Self: CommonSupportedElement + ndarray::NdFloat {
+    /// Create an instance from fp16 little-endian bytes
+    fn from_bf16_bytes(bytes: &[u8]) -> Self;
+
+    /// Conver the value as fp16 and save it to the buffer.
+    fn extend_byte_vec_bf16(&self, v: &mut Vec<u8>);
+}
+
+impl BFloat16ConversionSupportedElement for f32 {
+    fn from_bf16_bytes(bytes: &[u8]) -> Self {
+        // padding zeros in the end to get fp32
+        f32::from_le_bytes([0x0, 0x0, bytes[0], bytes[1]])
+    }
+
+    fn extend_byte_vec_bf16(&self, v: &mut Vec<u8>) {
+        let bits = self.to_bits();
+        let sign = ((bits & 0x8000_0000) >> 24) as u8;
+        let mut exponent = ((bits & 0x7f80_0000) >> 23) as u16;
+        let fraction_cut_off = bits & 0xFFFF;
+        let fraction_keep = (bits & 0x7F0000) >> 16;
+        let round = if fraction_cut_off > 0x8000 {
+            1
+        } else if fraction_cut_off < 0x8000 {
+            0
+        } else {
+            fraction_keep & 1
+        };
+
+        let mut new_frac = fraction_keep + round;
+        if new_frac > 0x7F {
+            new_frac >>= 1;
+            exponent += 1;
+            // exceeding the upper bound due to rounding, return inf
+            if exponent >= 0x100 {
+                v.extend_from_slice(&[0x80, sign | 0x7F]);
+                return;
+            }
+        }
+        let exponent = (exponent & 0xFF) as u8; 
+        v.extend_from_slice(&[(new_frac as u8) | ((exponent & 1) << 7), (exponent >> 1) | sign]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -261,4 +310,24 @@ mod tests {
         assert_eq!(f32::from_fp16_bytes(&[0x0, 0x7C]), f32::INFINITY);
         assert_eq!(f32::from_fp16_bytes(&[0x0, 0xFC]), f32::NEG_INFINITY);
     }
+
+    #[test]
+    pub fn test_load_bf6_to_f32(){
+        let test_cases:[(f32, [u8;2]); 4] = [
+            (1.0f32, [0x80, 0x3F]),
+            (-2.0f32, [0x0, 0xC0]),
+            (3.140625, [0x49, 0x40]),
+            (0.334, [0xAB, 0x3E]),
+        ];
+
+        for (expected, bytes) in test_cases {
+            assert_approx_eq!(f32::from_bf16_bytes(&bytes), expected, F16_EPS);
+        }
+        // test inf
+        assert_eq!(f32::from_bf16_bytes(&[0x80, 0x7F]), f32::INFINITY);
+        assert_eq!(f32::from_bf16_bytes(&[0x80, 0xFF]), f32::NEG_INFINITY);
+        assert!(f32::is_nan(f32::from_bf16_bytes(&[0xC1, 0xFF])));
+    }
+
+
 }

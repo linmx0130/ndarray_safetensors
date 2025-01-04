@@ -30,7 +30,7 @@
 //! Copyright (c) 2024, Mengxiao Lin. The crate is published under MIT License.
 mod element;
 
-pub use crate::element::{CommonSupportedElement, Float16ConversionSupportedElement};
+pub use crate::element::{CommonSupportedElement, Float16ConversionSupportedElement, BFloat16ConversionSupportedElement};
 use safetensors;
 use ndarray::{self, ShapeBuilder};
 use std::{borrow::Cow, mem::size_of};
@@ -104,6 +104,32 @@ impl TensorViewWithDataBuffer {
             buf
         }
     }
+
+    /// Create a new TensorViewWithDataBuffer object in BF16 from a ndarray.
+    pub fn new_bf16<A, S, D>(array: &ndarray::ArrayBase<S, D>) -> TensorViewWithDataBuffer
+        where 
+            A: BFloat16ConversionSupportedElement, 
+            S: ndarray::Data<Elem = A>,
+            D: ndarray::Dimension 
+    {
+        let shape = Vec::from(array.shape());
+        // convert the tensor to one dim array with row-major (C style)
+        let one_dim_array = array.to_shape(
+            ((array.len(),), ndarray::Order::RowMajor)
+        ).unwrap();
+        let v = one_dim_array.to_vec();
+        let mut buf: Vec<u8> = Vec::with_capacity(v.len() * 2);
+        for value in v {
+            value.extend_byte_vec_bf16(&mut buf);
+        }
+
+        TensorViewWithDataBuffer {
+            dtype: safetensors::Dtype::BF16,
+            shape,
+            buf
+        }
+    }
+
 
 }
 
@@ -271,6 +297,32 @@ pub fn parse_fp16_tensor_view_data<A>(view: &safetensors::tensor::TensorView) ->
     Ok(array)
 }
 
+/// Deserialized a BF16 Safetensors View as a ndarray
+/// 
+/// The return ndarray will own the data. If the data type of the tensor is not BF16, 
+/// a [`DeserializationError::TypeMismatchedError`] will be returned.
+pub fn parse_bf16_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<A>, ndarray::Dim<ndarray::IxDynImpl>>, DeserializationError>  
+    where 
+        A: BFloat16ConversionSupportedElement,
+{
+    if view.dtype() != safetensors::Dtype::BF16 {
+        return Err(DeserializationError::TypeMismatchedError{
+            expected_type: safetensors::Dtype::BF16,
+            actual_type: view.dtype()
+        });
+    }
+    let dtype_size = size_of::<A>();
+    let data = view.data();
+    let shape = Vec::from(view.shape());
+    let mut values: Vec<A> = Vec::with_capacity(data.len() / dtype_size);
+    for idx in (0..data.len()).step_by(2) {
+        values.push(A::from_bf16_bytes(&data[idx..(idx+2)]))
+    }
+    let array = ndarray::ArrayBase::from_shape_vec(shape, values).unwrap();
+    Ok(array)
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -308,23 +360,22 @@ mod tests {
     }
 
     #[test]
-    pub fn test_serialize_deserialize_f16_data() {
+    pub fn test_serialize_deserialize_bf16_data() {
         let data = ndarray::array![[0.1, 0.2, 1.0], [3.0, 4.0, -2.0],  [0.0, -1.0, 3.14]];
-        let tensor_view = TensorViewWithDataBuffer::new_fp16(&data);
-        let arr = parse_fp16_tensor_view_data::<f32>(&tensor_view.to_tensor_view()).unwrap();
+        let tensor_view = TensorViewWithDataBuffer::new_bf16(&data);
+        let arr = parse_bf16_tensor_view_data::<f32>(&tensor_view.to_tensor_view()).unwrap();
         for i in 0..3usize {
             for j in 0..3usize {
                 assert_approx_eq::assert_approx_eq!(data[[i,j]], arr[[i,j]], 1e-3);
             }
         }
 
-        let special = ndarray::array![f32::INFINITY, f32::NEG_INFINITY, 2147483647.0, f32::NAN];
-        let tensor_view = TensorViewWithDataBuffer::new_fp16(&special);
-        let sarr = parse_fp16_tensor_view_data::<f32>(&tensor_view.to_tensor_view()).unwrap();
+        let special = ndarray::array![f32::INFINITY, f32::NEG_INFINITY, f32::NAN];
+        let tensor_view = TensorViewWithDataBuffer::new_bf16(&special);
+        let sarr = parse_bf16_tensor_view_data::<f32>(&tensor_view.to_tensor_view()).unwrap();
         assert_eq!(sarr[0], f32::INFINITY);
         assert_eq!(sarr[1], f32::NEG_INFINITY);
-        assert_eq!(sarr[2], f32::INFINITY);
-        assert!(sarr[3].is_nan()); 
+        assert!(sarr[2].is_nan()); 
     }
     
 }
