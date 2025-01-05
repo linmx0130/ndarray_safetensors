@@ -26,4 +26,4 @@ for (name, tensor_view) in tensors.tensors() {
 ```
 
 ## Copyright & License
-Copyright (c) 2024 Mengxiao Lin. Check LICENSE file.
+Copyright (c) 2024-2025 Mengxiao Lin. Check LICENSE file.

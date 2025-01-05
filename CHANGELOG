@@ -1,0 +1,2 @@
+## v0.2.1
+- Add experimental support for IEEE 754 16-bits floating points (fp16) and Brain Float 16 (bf16). Data can only be represented as f32 in ndarray.

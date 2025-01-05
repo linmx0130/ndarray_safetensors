@@ -1,6 +1,6 @@
 [package]
 name = "ndarray-safetensors"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "MIT"
 description = "Serialize / deserialize ndarrays with safetensors."
@@ -11,7 +11,7 @@ keywords = ["safetensors", "ndarray", "tensors", "array", "serialization"]
 
 
 [dependencies]
-ndarray = "0.16.1"
+ndarray = "0.16"
 safetensors = "0.4.5"
 
 [dev-dependencies]

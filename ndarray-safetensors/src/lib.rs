@@ -132,7 +132,7 @@ impl TensorViewWithDataBuffer {
 
 }
 
-impl<'data> safetensors::View for TensorViewWithDataBuffer {
+impl safetensors::View for TensorViewWithDataBuffer {
     fn dtype(&self) -> safetensors::Dtype {
         self.dtype
     }
@@ -271,10 +271,12 @@ pub fn parse_tensors<A>(tensors: &safetensors::SafeTensors) -> Result<Vec<(Strin
     Ok(arrays)
 }
 
-/// Deserialized a FP16 Safetensors View as a ndarray
+/// Deserialized a IEEE 754 FP16 Safetensors View as a ndarray.
 /// 
 /// The return ndarray will own the data. If the data type of the tensor is not FP16, 
 /// a [`DeserializationError::TypeMismatchedError`] will be returned.
+/// 
+/// This API is experimental.
 pub fn parse_fp16_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<A>, ndarray::Dim<ndarray::IxDynImpl>>, DeserializationError>  
     where 
         A: Float16ConversionSupportedElement,
@@ -296,10 +298,12 @@ pub fn parse_fp16_tensor_view_data<A>(view: &safetensors::tensor::TensorView) ->
     Ok(array)
 }
 
-/// Deserialized a BF16 Safetensors View as a ndarray
+/// Deserialized a [BF16](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format) Safetensors View as a ndarray
 /// 
 /// The return ndarray will own the data. If the data type of the tensor is not BF16, 
 /// a [`DeserializationError::TypeMismatchedError`] will be returned.
+/// 
+/// This API is experimental.
 pub fn parse_bf16_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Result<ndarray::ArrayBase<ndarray::OwnedRepr<A>, ndarray::Dim<ndarray::IxDynImpl>>, DeserializationError>  
     where 
         A: BFloat16ConversionSupportedElement,
