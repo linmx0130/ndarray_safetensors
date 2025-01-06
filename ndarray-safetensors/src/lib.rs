@@ -41,7 +41,6 @@ pub struct TensorViewWithDataBuffer{
     dtype: safetensors::Dtype,
     shape: Vec<usize>,
 }
-
 impl TensorViewWithDataBuffer {
     /// Create a standard TensorView from this buffer. No copy of data occurs.
     pub fn to_tensor_view(&self) -> safetensors::tensor::TensorView<'_> {
@@ -66,11 +65,29 @@ impl TensorViewWithDataBuffer {
         let one_dim_array = array.to_shape(
             ((array.len(),), ndarray::Order::RowMajor)
         ).unwrap();
-        let v = one_dim_array.to_vec();
-        let mut buf: Vec<u8> = Vec::with_capacity(size_of::<A>() * v.len());
-        for value in v {
-            value.extend_byte_vec(&mut buf);
-        }
+
+        let buf = if cfg!(all(target_endian = "little", feature = "unsafe_copy")) {
+            // Directly copy the raw data on little endian machines
+            let raw_ptr = one_dim_array.as_ptr();
+            unsafe {
+                let u8_ptr = raw_ptr as *mut u8;
+                let length = one_dim_array.len() * size_of::<A>();
+                let layout = std::alloc::Layout::array::<u8>(length).unwrap();
+                let buf_ptr = std::alloc::alloc(layout);
+                if buf_ptr.is_null() {
+                    panic!("Error in allocating memory for new tensor views");
+                }
+                std::ptr::copy_nonoverlapping(u8_ptr, buf_ptr, length);
+                Vec::from_raw_parts(buf_ptr, length, length)
+            }
+        } else {
+            let v = one_dim_array.to_vec();
+            let mut buf: Vec<u8> = Vec::with_capacity(size_of::<A>() * v.len());
+            for value in v {
+                value.extend_byte_vec(&mut buf);
+            }
+            buf
+        };
 
         TensorViewWithDataBuffer {
             dtype: A::safetensors_dtype(),
