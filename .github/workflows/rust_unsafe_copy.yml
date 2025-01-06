@@ -1,4 +1,4 @@
-name: Rust
+name: Rust with unsafe_copy feature
 
 on:
   push:
