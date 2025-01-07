@@ -68,7 +68,8 @@ impl TensorViewWithDataBuffer {
 
         let buf = if cfg!(all(target_endian = "little", feature = "unsafe_copy")) {
             // Directly copy the raw data on little endian machines
-            let raw_ptr = one_dim_array.as_ptr();
+            let v = one_dim_array.to_vec();
+            let raw_ptr = v.as_ptr();
             unsafe {
                 let u8_ptr = raw_ptr as *mut u8;
                 let length = one_dim_array.len() * size_of::<A>();
@@ -105,7 +106,7 @@ impl TensorViewWithDataBuffer {
     {
         let shape = Vec::from(array.shape());
         // convert the tensor to one dim array with row-major (C style)
-        let one_dim_array = array.to_shape(
+        let one_dim_array: ndarray::ArrayBase<ndarray::CowRepr<'_, A>, ndarray::Dim<[usize; 1]>> = array.to_shape(
             ((array.len(),), ndarray::Order::RowMajor)
         ).unwrap();
         let v = one_dim_array.to_vec();
@@ -199,15 +200,40 @@ pub fn parse_tensor_view_data<A>(view: &safetensors::tensor::TensorView) -> Resu
             actual_type: view.dtype()
         });
     }
-    let dtype_size = size_of::<A>();
     let data = view.data();
     let shape = Vec::from(view.shape());
-    let mut values: Vec<A> = Vec::with_capacity(data.len() / dtype_size);
-    for idx in (0..data.len()).step_by(dtype_size) {
-        values.push(A::from_bytes(&data[idx..(idx+dtype_size)]))
-    }
+
+    let values = parse_data_from_u8_slice(data);
     let array = ndarray::ArrayBase::from_shape_vec(shape, values).unwrap();
     Ok(array)
+}
+
+/// Clone the data from a u8 slice into a vec of type A.
+/// The u8 slice should be little-endian representation of an array of type A elements.
+#[inline]
+fn parse_data_from_u8_slice<A>(data: &[u8]) -> Vec<A> 
+where A: CommonSupportedElement
+{
+   let dtype_size = size_of::<A>();
+   if cfg!(all(target_endian="little", feature = "unsafe_copy")) {
+        let length = data.len() / dtype_size;
+        let layout = std::alloc::Layout::array::<A>(length).unwrap();
+        unsafe{
+            let data_ptr = data.as_ptr() as *const A;
+            let buf_ptr = std::alloc::alloc(layout) as *mut A;
+            if buf_ptr.is_null() {
+                panic!("Error in allocating memory for new ndarray");
+            }
+            std::ptr::copy_nonoverlapping(data_ptr, buf_ptr, length);
+            Vec::from_raw_parts(buf_ptr, length, length)
+        }
+    } else {
+        let mut values: Vec<A> = Vec::with_capacity(data.len() / dtype_size);
+        for idx in (0..data.len()).step_by(dtype_size) {
+            values.push(A::from_bytes(&data[idx..(idx+dtype_size)]))
+        }
+        values
+    }
 }
 
 /// Deserialized a Safetensors View as a ndarray with a known dimension.
@@ -261,13 +287,8 @@ pub fn parse_tensor_view_data_with_dimension<A, D, ID>(view: &safetensors::tenso
         })
     }
     
-    let dtype_size = size_of::<A>();
     let data = view.data();
-
-    let mut values: Vec<A> = Vec::with_capacity(data.len() / dtype_size);
-    for idx in (0..data.len()).step_by(dtype_size) {
-        values.push(A::from_bytes(&data[idx..(idx+dtype_size)]))
-    }
+    let values: Vec<A> = parse_data_from_u8_slice(data);
     let decode_shape = ndarray::Shape::from(dim).set_f(false);
     let array = ndarray::ArrayBase::from_shape_vec(decode_shape, values).unwrap();
     Ok(array)
@@ -397,5 +418,13 @@ mod tests {
         assert_eq!(sarr[1], f32::NEG_INFINITY);
         assert!(sarr[2].is_nan()); 
     }
-    
+     
+    #[test]
+    pub fn serialize_noncontiguous_data() {
+        let data = ndarray::array![[1.0, 2.0], [3.0, 4.0]];
+        let slice = data.slice(ndarray::s![.., 1..]);
+        let tensor_view = TensorViewWithDataBuffer::new(&slice);
+        let deserialized:ndarray::Array2<f64> = parse_tensor_view_data_with_dimension(&(tensor_view.to_tensor_view()), (2, 1)).unwrap();
+        assert_eq!(slice, deserialized);
+    }
 }
