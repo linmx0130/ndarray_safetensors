@@ -68,17 +68,26 @@ impl TensorViewWithDataBuffer {
 
         let buf = if cfg!(all(target_endian = "little", feature = "unsafe_copy")) {
             // Directly copy the raw data on little endian machines
-            let v = one_dim_array.to_vec();
-            let raw_ptr = v.as_ptr();
-            unsafe {
-                let u8_ptr = raw_ptr as *mut u8;
-                let length = one_dim_array.len() * size_of::<A>();
-                let layout = std::alloc::Layout::array::<u8>(length).unwrap();
-                let buf_ptr = std::alloc::alloc(layout);
-                if buf_ptr.is_null() {
-                    panic!("Error in allocating memory for new tensor views");
+            let length = one_dim_array.len() * size_of::<A>();
+            let layout = std::alloc::Layout::array::<u8>(length).unwrap();
+            let buf_ptr = unsafe { std::alloc::alloc(layout)};  
+            if buf_ptr.is_null() {
+                panic!("Error in allocating memory for new tensor views");
+            }
+            
+            if let Some(slc) = one_dim_array.as_slice() {
+                let u8_ptr = slc.as_ptr() as *const u8;
+                unsafe{
+                    std::ptr::copy_nonoverlapping(u8_ptr, buf_ptr, length);
                 }
-                std::ptr::copy_nonoverlapping(u8_ptr, buf_ptr, length);
+            } else {
+                let contiguous_data = one_dim_array.to_vec();
+                let u8_ptr = contiguous_data.as_ptr() as *const u8;
+                unsafe  {
+                    std::ptr::copy_nonoverlapping(u8_ptr, buf_ptr, length);
+                }
+            }
+            unsafe {
                 Vec::from_raw_parts(buf_ptr, length, length)
             }
         } else {

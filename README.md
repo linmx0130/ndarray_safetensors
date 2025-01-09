@@ -25,5 +25,8 @@ for (name, tensor_view) in tensors.tensors() {
 }
 ```
 
+## Features
+* `unsafe_copy`: Allowing directly copying the bytes instead of parsing floats in serialization/deserialization for little-endian machines.
+
 ## Copyright & License
 Copyright (c) 2024-2025 Mengxiao Lin. Check LICENSE file.
