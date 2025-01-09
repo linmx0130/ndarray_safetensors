@@ -91,9 +91,8 @@ impl TensorViewWithDataBuffer {
                 Vec::from_raw_parts(buf_ptr, length, length)
             }
         } else {
-            let v = one_dim_array.to_vec();
-            let mut buf: Vec<u8> = Vec::with_capacity(size_of::<A>() * v.len());
-            for value in v {
+            let mut buf: Vec<u8> = Vec::with_capacity(size_of::<A>() * one_dim_array.len());
+            for value in one_dim_array.iter() {
                 value.extend_byte_vec(&mut buf);
             }
             buf
@@ -118,9 +117,8 @@ impl TensorViewWithDataBuffer {
         let one_dim_array: ndarray::ArrayBase<ndarray::CowRepr<'_, A>, ndarray::Dim<[usize; 1]>> = array.to_shape(
             ((array.len(),), ndarray::Order::RowMajor)
         ).unwrap();
-        let v = one_dim_array.to_vec();
-        let mut buf: Vec<u8> = Vec::with_capacity(v.len() * 2);
-        for value in v {
+        let mut buf: Vec<u8> = Vec::with_capacity(one_dim_array.len() * 2);
+        for value in one_dim_array.iter() {
             value.extend_byte_vec_fp16(&mut buf);
         }
 
@@ -143,9 +141,8 @@ impl TensorViewWithDataBuffer {
         let one_dim_array = array.to_shape(
             ((array.len(),), ndarray::Order::RowMajor)
         ).unwrap();
-        let v = one_dim_array.to_vec();
-        let mut buf: Vec<u8> = Vec::with_capacity(v.len() * 2);
-        for value in v {
+        let mut buf: Vec<u8> = Vec::with_capacity(one_dim_array.len() * 2);
+        for value in one_dim_array.iter() {
             value.extend_byte_vec_bf16(&mut buf);
         }
 
