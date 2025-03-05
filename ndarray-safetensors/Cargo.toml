@@ -19,3 +19,4 @@ assert_approx_eq = "1.0"
 
 [features]
 unsafe_copy = []
+x86_sse = []

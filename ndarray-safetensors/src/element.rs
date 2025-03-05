@@ -150,6 +150,9 @@ pub trait Float16ConversionSupportedElement where Self: CommonSupportedElement +
     /// Create an instance from fp16 little-endian bytes
     fn from_fp16_bytes(bytes: &[u8]) -> Self;
 
+    /// Create a vector of instances from fp16 little-endian bytes
+    fn create_vec_from_fp16_bytes(bytes: &[u8]) -> Vec<Self>;
+
     /// Conver the value as fp16 and save it to the buffer.
     fn extend_byte_vec_fp16(&self, v: &mut Vec<u8>);
 }
@@ -178,6 +181,21 @@ impl Float16ConversionSupportedElement for f32 {
             let exponent = (exponent as u32) + 127 - 15;    // adjust exponent to have 8 bits
             f32::from_bits(sign | (exponent << 23) | (fraction << 13))
         }
+    }
+
+    #[cfg(feature="x86_sse")]
+    fn create_vec_from_fp16_bytes(bytes: &[u8]) -> Vec<Self> {
+        use crate::x86_sse::create_f32_vec_from_fp16_bytes;
+        create_f32_vec_from_fp16_bytes(bytes)
+    }
+
+    #[cfg(not(feature="x86_sse"))]
+    fn create_vec_from_fp16_bytes(bytes: &[u8]) -> Vec<Self> {
+        let mut values: Vec<f32> = Vec::with_capacity(bytes.len() / 2);
+        for idx in (0..bytes.len()).step_by(2) {
+            values.push(Self::from_fp16_bytes(&bytes[idx..(idx+2)]));
+        }
+        values
     }
 
     fn extend_byte_vec_fp16(&self, v: &mut Vec<u8>) {

@@ -1,0 +1,22 @@
+name: Rust with x86_sse feature
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build
+      run: cargo build --verbose --features x86_sse
+    - name: Run tests
+      run: cargo test --verbose --features x86_sse

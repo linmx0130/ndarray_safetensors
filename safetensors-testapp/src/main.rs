@@ -46,8 +46,25 @@ fn deserialize_demo() {
         }
     }
 }
+
+fn deserialize_fp16_demo() {
+    println!("Read data/rand16.safetensors");
+    let path_example = Path::new("data/rand16.safetensors");
+    let file = File::open(path_example).unwrap();
+    let buffer = unsafe {MmapOptions::new().map(&file).unwrap()};
+    let tensors = safetensors::SafeTensors::deserialize(&buffer).unwrap();
+    for (name, tensor_view) in tensors.tensors() {
+        println!("Tensor: {}, type = {:?}", name, tensor_view.dtype());
+        if tensor_view.dtype() == safetensors::Dtype::F16 {
+            let arr= ndarray_safetensors::parse_fp16_tensor_view_data::<f32>(&tensor_view).unwrap();
+            println!("{}", arr);
+        }
+    }
+}   
+
 fn main() {
     serailize_demo();
     println!("===");
     deserialize_demo();
+    deserialize_fp16_demo();
 }
