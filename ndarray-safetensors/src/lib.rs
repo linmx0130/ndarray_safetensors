@@ -412,6 +412,18 @@ mod tests {
         assert_eq!(arr[4], 1.0);
         assert_eq!(arr[5], -2.0);
     }
+    
+    #[test]
+    pub fn test_serialize_deserialize_f16_data() {
+        let x = ndarray::array![3.140625f32, 1.0f32, -2.0f32];
+        let tensor_view = TensorViewWithDataBuffer::new_fp16(&x);
+        let arr = parse_fp16_tensor_view_data::<f32>(&tensor_view.to_tensor_view()).unwrap();
+
+        assert_eq!(arr[0], 3.140625);
+        assert_eq!(arr[1], 1.0);
+        assert_eq!(arr[2], -2.0);
+    }
+
 
     #[test]
     pub fn test_serialize_deserialize_bf16_data() {

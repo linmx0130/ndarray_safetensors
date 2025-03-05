@@ -197,7 +197,14 @@ impl Float16ConversionSupportedElement for f32 {
         }
         values
     }
+    
+    #[cfg(feature="x86_sse")]
+    fn extend_byte_vec_fp16(&self, v: &mut Vec<u8>) {
+        use crate::x86_sse::create_fp16_bytes_from_f32;
+        v.extend_from_slice(&create_fp16_bytes_from_f32(*self));
+    }
 
+    #[cfg(not(feature="x86_sse"))]
     fn extend_byte_vec_fp16(&self, v: &mut Vec<u8>) {
         let bits = self.to_bits();
         let sign = ((bits >> 24) & 0x80) as u8;
