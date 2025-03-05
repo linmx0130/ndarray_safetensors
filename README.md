@@ -26,6 +26,7 @@ for (name, tensor_view) in tensors.tensors() {
 ```
 
 ## Features
+The following crate feature flags are available. They are configured in your `Cargo.toml`.
 * `unsafe_copy`: Allowing directly copying the bytes instead of parsing floats in serialization/deserialization for little-endian machines.
 * `x86_sse`: Using [SSE instructions](https://en.wikipedia.org/wiki/Streaming_SIMD_Extensions) to optimize some conversions, it could be useful for `fp16`.
 

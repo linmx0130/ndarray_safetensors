@@ -153,7 +153,7 @@ pub trait Float16ConversionSupportedElement where Self: CommonSupportedElement +
     /// Create a vector of instances from fp16 little-endian bytes
     fn create_vec_from_fp16_bytes(bytes: &[u8]) -> Vec<Self>;
 
-    /// Conver the value as fp16 and save it to the buffer.
+    /// Convert the value as fp16 and save it to the buffer.
     fn extend_byte_vec_fp16(&self, v: &mut Vec<u8>);
 }
 
@@ -259,7 +259,7 @@ pub trait BFloat16ConversionSupportedElement where Self: CommonSupportedElement 
     /// Create an instance from fp16 little-endian bytes
     fn from_bf16_bytes(bytes: &[u8]) -> Self;
 
-    /// Conver the value as fp16 and save it to the buffer.
+    /// Convert the value as fp16 and save it to the buffer.
     fn extend_byte_vec_bf16(&self, v: &mut Vec<u8>);
 }
 
