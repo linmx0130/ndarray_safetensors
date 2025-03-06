@@ -1,3 +1,5 @@
+## v0.3.0
+- Add x86_sse feature to optimize fp16 related conversions on X86 arch with SSE supports.
 ## v0.2.2
 - Add unsafe_copy optimization feature.
 - Optimize the serialization code to avoid some unnecessary memory allocation.
