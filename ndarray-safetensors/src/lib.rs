@@ -125,10 +125,16 @@ impl TensorViewWithDataBuffer {
         let one_dim_array: ndarray::ArrayBase<ndarray::CowRepr<'_, A>, ndarray::Dim<[usize; 1]>> = array.to_shape(
             ((array.len(),), ndarray::Order::RowMajor)
         ).unwrap();
-        let mut buf: Vec<u8> = Vec::with_capacity(one_dim_array.len() * 2);
-        for value in one_dim_array.iter() {
-            value.extend_byte_vec_fp16(&mut buf);
-        }
+        
+        let buf = if let Some(slc) = one_dim_array.as_slice() {
+            A::create_byte_vec_fp16_from_slice(slc)
+        } else {
+            let mut buf: Vec<u8> = Vec::with_capacity(one_dim_array.len() * 2);
+            for value in one_dim_array.iter() {
+                value.extend_byte_vec_fp16(&mut buf);
+            }
+            buf
+        };
 
         TensorViewWithDataBuffer {
             dtype: safetensors::Dtype::F16,
@@ -422,6 +428,18 @@ mod tests {
         assert_eq!(arr[0], 3.140625);
         assert_eq!(arr[1], 1.0);
         assert_eq!(arr[2], -2.0);
+    }
+    
+    #[test]
+    pub fn test_serialize_deserialize_f16_data2() {
+        let x = ndarray::array![1.0f32, 2.0f32, 4.0f32, 0.5f32];
+        let tensor_view = TensorViewWithDataBuffer::new_fp16(&x);
+        let arr = parse_fp16_tensor_view_data::<f32>(&tensor_view.to_tensor_view()).unwrap();
+
+        assert_eq!(arr[0], 1.0f32);
+        assert_eq!(arr[1], 2.0f32);
+        assert_eq!(arr[2], 4.0f32);
+        assert_eq!(arr[3], 0.5f32);
     }
 
 

@@ -155,6 +155,9 @@ pub trait Float16ConversionSupportedElement where Self: CommonSupportedElement +
 
     /// Convert the value as fp16 and save it to the buffer.
     fn extend_byte_vec_fp16(&self, v: &mut Vec<u8>);
+
+    /// Convert a slice of values as fp16 and create the byte buffer for it
+    fn create_byte_vec_fp16_from_slice(values: &[Self]) -> Vec<u8>;
 }
 
 impl Float16ConversionSupportedElement for f32 {
@@ -254,6 +257,21 @@ impl Float16ConversionSupportedElement for f32 {
                 v.extend_from_slice(&[(frac16 & 0xFF) as u8, b1]);
             }
         }
+    }
+    
+    #[cfg(not(feature="x86_sse"))]
+    fn create_byte_vec_fp16_from_slice(values: &[f32]) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::with_capacity(values.len() * 2);
+        for value in values.iter() {
+            (*value).extend_byte_vec_fp16(&mut buf);
+        }
+        buf
+    }
+    
+    #[cfg(feature="x86_sse")]
+    fn create_byte_vec_fp16_from_slice(values: &[f32]) -> Vec<u8> {
+        use crate::x86_sse::create_fp16_bytes_vec_from_f32_slice;
+        create_fp16_bytes_vec_from_f32_slice(values)
     }
 }
 

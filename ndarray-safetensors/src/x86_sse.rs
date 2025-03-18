@@ -1,12 +1,14 @@
 #[cfg(target_arch = "x86")]
 use core::arch::x86::{
     __m128, __m128i, _mm_cvtph_ps, _mm_set_epi8, _mm_set1_ps, _mm_cvtps_ph,
+    _mm_set_ps,
     _MM_FROUND_TO_NEAREST_INT,
 };
 
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::{
     __m128, __m128i, _mm_cvtph_ps, _mm_set_epi8, _mm_set1_ps, _mm_cvtps_ph,
+    _mm_set_ps,
     _MM_FROUND_TO_NEAREST_INT,
 };
 
@@ -59,4 +61,35 @@ pub(crate) fn create_fp16_bytes_from_f32(v: f32) -> [u8;2] {
         let f16_values_arr = std::mem::transmute::<__m128i, [u8; 16]>(f16_pack);
         [f16_values_arr[0], f16_values_arr[1]]
     }
+}
+
+/// Convert a f32 value to fp16 bytes with SSE/f16c instructions.
+pub(crate) fn create_fp16_bytes_vec_from_f32_slice(v: &[f32]) -> Vec<u8> {
+    let output_len = v.len() * 2;
+    let mut answer: Vec<u8> = Vec::with_capacity(output_len);
+    let mut i = 0;
+    while i + 4 < v.len() {
+        let f16_values_arr = unsafe {
+            let pack: __m128 = _mm_set_ps(v[i], v[i+1], v[i+2], v[i+3]);
+            let f16_pack = _mm_cvtps_ph(pack, _MM_FROUND_TO_NEAREST_INT);
+            std::mem::transmute::<__m128i, [u8; 16]>(f16_pack)
+        };
+        for f16_value in f16_values_arr.iter() {
+            answer.push(*f16_value);
+        }
+        i += 4;
+    }
+    
+    while i < v.len() {
+        let f16_values_arr = unsafe {
+            let pack : __m128 = _mm_set1_ps(v[i]);
+            let f16_pack = _mm_cvtps_ph(pack, _MM_FROUND_TO_NEAREST_INT);
+            std::mem::transmute::<__m128i, [u8; 16]>(f16_pack)
+        };
+        answer.push(f16_values_arr[0]);
+        answer.push(f16_values_arr[1]);
+        i += 1;
+    }
+
+    answer
 }
